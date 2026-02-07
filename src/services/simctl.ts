@@ -117,7 +117,6 @@ export async function launchApp(
 ): Promise<number> {
   const output = await runSimctl([
     "launch",
-    "--console-pty",
     udid,
     bundleId,
     ...args,

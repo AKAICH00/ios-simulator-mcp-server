@@ -1,22 +1,52 @@
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
+import { constants } from "fs";
+import { access } from "fs/promises";
 import { promisify } from "util";
 import { IDB_TIMEOUT_MS } from "../constants.js";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
-// Use Python 3.13 venv IDB to avoid Python 3.14 asyncio compatibility issues
-const IDB_PATH = `${process.env.HOME}/.ios-simulator-mcp/venv/bin/idb`;
+// IDB path: check IDB_PATH env var, then venv, then system PATH
+const IDB_ENV_PATH = process.env.IDB_PATH;
+const IDB_VENV_PATH = `${process.env.HOME}/.ios-simulator-mcp/venv/bin/idb`;
+
+async function isExecutable(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveIdbPath(): Promise<string | null> {
+  if (IDB_ENV_PATH && await isExecutable(IDB_ENV_PATH)) {
+    return IDB_ENV_PATH;
+  }
+
+  if (await isExecutable(IDB_VENV_PATH)) {
+    return IDB_VENV_PATH;
+  }
+
+  try {
+    const { stdout } = await execAsync("command -v idb");
+    const whichPath = stdout.trim();
+    if (whichPath && await isExecutable(whichPath)) {
+      return whichPath;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
 
 /**
  * Check if IDB is installed
  */
 export async function isIdbInstalled(): Promise<boolean> {
-  try {
-    await execAsync(`test -x ${IDB_PATH}`);
-    return true;
-  } catch {
-    return false;
-  }
+  return (await resolveIdbPath()) !== null;
 }
 
 /**
@@ -26,9 +56,12 @@ async function runIdb(
   args: string[],
   timeout: number = IDB_TIMEOUT_MS
 ): Promise<string> {
-  const { stdout, stderr } = await execAsync(`${IDB_PATH} ${args.join(" ")}`, {
-    timeout,
-  });
+  const idbPath = await resolveIdbPath();
+  if (!idbPath) {
+    throw new Error("IDB is not installed or not executable.");
+  }
+
+  const { stdout, stderr } = await execFileAsync(idbPath, args, { timeout });
 
   if (stderr && !stderr.includes("WARNING")) {
     console.error(`idb stderr: ${stderr}`);
