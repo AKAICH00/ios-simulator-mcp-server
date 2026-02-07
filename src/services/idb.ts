@@ -4,15 +4,16 @@ import { IDB_TIMEOUT_MS } from "../constants.js";
 
 const execAsync = promisify(exec);
 
-// Use Python 3.13 venv IDB to avoid Python 3.14 asyncio compatibility issues
-const IDB_PATH = `${process.env.HOME}/.ios-simulator-mcp/venv/bin/idb`;
+// IDB path: check IDB_PATH env var, then venv, then system PATH
+const IDB_PATH = process.env.IDB_PATH
+  || `${process.env.HOME}/.ios-simulator-mcp/venv/bin/idb`;
 
 /**
  * Check if IDB is installed
  */
 export async function isIdbInstalled(): Promise<boolean> {
   try {
-    await execAsync(`test -x ${IDB_PATH}`);
+    await execAsync(`test -x ${IDB_PATH} || which idb`);
     return true;
   } catch {
     return false;
