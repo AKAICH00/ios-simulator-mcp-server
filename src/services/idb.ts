@@ -225,11 +225,16 @@ export async function screenshot(
 /**
  * Record video
  */
-export function recordVideo(
+export async function recordVideo(
   udid: string,
   outputPath: string
-): { stop: () => Promise<void> } {
-  const child = exec(`${IDB_PATH} record-video ${outputPath} --udid ${udid}`);
+): Promise<{ stop: () => Promise<void> }> {
+  const idbPath = await resolveIdbPath();
+  if (!idbPath) {
+    throw new Error("IDB is not installed or not executable.");
+  }
+
+  const child = execFile(idbPath, ["record-video", outputPath, "--udid", udid]);
 
   return {
     stop: async () => {
